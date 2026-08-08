@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNIM GeoConnect Mobile</title>
+    <title>SNIM GeoConnect Mobile - Édition Industrielle</title>
     <link rel="manifest" href="/manifest.json">
     <style>
         :root { --snim-blue: #003366; --snim-yellow: #f39c12; --danger: #e74c3c; --success: #2ecc71; }
@@ -16,21 +16,37 @@
         label { font-size: 0.9em; font-weight: bold; color: #555; display: block; margin-top: 10px; }
         select, input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1em; }
         .btn { width: 100%; padding: 12px; background: var(--snim-blue); color: white; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; margin-top: 15px; cursor: pointer; }
-        .btn-hse { background: var(--danger); }
         .btn-sync { background: var(--snim-yellow); color: #000; }
-        .log-item { background: #f8f9fa; border-left: 4px solid var(--snim-blue); padding: 8px; margin-top: 8px; border-radius: 4px; font-size: 0.85em; }
+        .log-item { background: #f8f9fa; border-left: 4px solid var(--snim-blue); padding: 10px; margin-top: 8px; border-radius: 4px; font-size: 0.85em; }
         .log-hse { border-left-color: var(--danger); background: #fdf2f2; }
+        .img-preview { width: 100%; max-height: 180px; object-fit: cover; border-radius: 6px; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
-    <div class="header">⚒️ SNIM GeoConnect Terrain</div>
+    <div class="header">⚒️ SNIM GeoConnect Terrain v2.0</div>
 
     <div class="status-bar">
         <span>Réseau : <span id="net-status" class="offline">Vérification...</span></span>
-        <span>Stockés localement : <span id="local-count">0</span></span>
+        <span>Stockés : <span id="local-count">0</span></span>
     </div>
 
+    <!-- CARTE PROFIL GÉOLOGUE -->
+    <div class="card" style="border-top: 4px solid var(--snim-yellow);">
+        <h3>👤 Identité Géologue Terrain</h3>
+        <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+                <label>Matricule SNIM</label>
+                <input type="text" id="geologist_id" placeholder="Ex: M-84920" onchange="saveProfile()">
+            </div>
+            <div style="flex: 2;">
+                <label>Nom & Prénom</label>
+                <input type="text" id="geologist_name" placeholder="Ex: Oumar DIALLO" onchange="saveProfile()">
+            </div>
+        </div>
+    </div>
+
+    <!-- CARTE SAISIE RELEVÉ -->
     <div class="card">
         <h3>📍 Saisie Relevé Géologique</h3>
         
@@ -44,6 +60,10 @@
 
         <label>Coordonnées GPS</label>
         <input type="text" id="gps_coords" readonly placeholder="Recherche GPS en cours...">
+
+        <label>📸 Photo du Spécimen / Fissure HSE</label>
+        <input type="file" id="photo_input" accept="image/*" capture="environment" onchange="handlePhotoSelect(event)">
+        <img id="photo_preview" class="img-preview" alt="Aperçu photo">
 
         <label>Notes & Observations Terrain</label>
         <textarea id="notes" rows="2" placeholder="Structure, pendage, état de la fracture..."></textarea>
@@ -65,18 +85,50 @@
 
     <script>
         let db;
-        const request = indexedDB.open("SNIM_GeoDB", 1);
+        let currentPhotoBase64 = null;
+
+        // Initialisation IndexedDB
+        const request = indexedDB.open("SNIM_GeoDB", 2);
 
         request.onupgradeneeded = (e) => {
             db = e.target.result;
-            db.createObjectStore("logs", { keyPath: "id" });
+            if (!db.objectStoreNames.contains("logs")) {
+                db.createObjectStore("logs", { keyPath: "id" });
+            }
         };
 
         request.onsuccess = (e) => {
             db = e.target.result;
+            loadProfile();
             updateLocalCount();
             renderLogs();
         };
+
+        // Charger/Sauvegarder profil en local
+        function saveProfile() {
+            localStorage.setItem("snim_matricule", document.getElementById('geologist_id').value);
+            localStorage.setItem("snim_geologist_name", document.getElementById('geologist_name').value);
+        }
+
+        function loadProfile() {
+            document.getElementById('geologist_id').value = localStorage.getItem("snim_matricule") || "";
+            document.getElementById('geologist_name').value = localStorage.getItem("snim_geologist_name") || "";
+        }
+
+        // Convertir la photo sélectionnée en Base64 pour enregistrement offline
+        function handlePhotoSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    currentPhotoBase64 = e.target.result;
+                    const preview = document.getElementById('photo_preview');
+                    preview.src = currentPhotoBase64;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
 
         // Geolocation HTML5
         navigator.geolocation.getCurrentPosition(
@@ -104,6 +156,13 @@
         updateStatus();
 
         function saveRecord() {
+            const matricule = document.getElementById('geologist_id').value;
+            const geoName = document.getElementById('geologist_name').value;
+            if (!matricule) {
+                alert("Veuillez saisir votre Matricule SNIM avant de valider.");
+                return;
+            }
+
             const rock = document.getElementById('rock_type').value;
             const coords = document.getElementById('gps_coords').value.split(',');
             const notes = document.getElementById('notes').value;
@@ -111,21 +170,27 @@
 
             const record = {
                 id: crypto.randomUUID(),
+                geologist_id: matricule,
+                geologist_name: geoName,
                 site: "Zouérate - Mine T014",
                 rock_type: rock,
                 latitude: parseFloat(coords[0]),
                 longitude: parseFloat(coords[1] || 0),
                 notes: notes,
                 hse_alert: hse,
+                photo_data: currentPhotoBase64,
                 created_at: new Date().toISOString()
             };
 
             const tx = db.transaction("logs", "readwrite");
             tx.objectStore("logs").add(record);
             tx.oncomplete = () => {
-                alert(hse ? "🚨 ALERTE HSE enregistrée localement !" : " Relevé géologique enregistré localement !");
+                alert(hse ? "🚨 ALERTE HSE & Photo enregistrées localement !" : " Relevé géologique & Photo enregistrés localement !");
                 document.getElementById('notes').value = "";
                 document.getElementById('hse_alert').checked = false;
+                document.getElementById('photo_input').value = "";
+                document.getElementById('photo_preview').style.display = "none";
+                currentPhotoBase64 = null;
                 updateLocalCount();
                 renderLogs();
             };
@@ -149,8 +214,10 @@
                 list.innerHTML = req.result.map(log => `
                     <div class="log-item ${log.hse_alert ? 'log-hse' : ''}">
                         <strong>${log.rock_type}</strong> ${log.hse_alert ? '🚨 [HSE]' : ''}<br>
-                        📍 ${log.latitude}, ${log.longitude}<br>
-                        <small>${new Date(log.created_at).toLocaleString('fr-FR')}</small>
+                        👤 <strong>Par :</strong> ${log.geologist_name || 'Inconnu'} (${log.geologist_id})<br>
+                        📍 <strong>GPS :</strong> ${log.latitude}, ${log.longitude}<br>
+                        ${log.photo_data ? `<img src="${log.photo_data}" style="width: 100%; max-height: 120px; object-fit: cover; border-radius: 4px; margin-top: 5px;">` : ''}
+                        <small style="color: #777;">${new Date(log.created_at).toLocaleString('fr-FR')}</small>
                     </div>
                 `).join('') || '<small>Aucune donnée locale en attente.</small>';
             };
@@ -184,7 +251,6 @@
                         throw new Error("Backend non connecté");
                     }
                 } catch (err) {
-                    // Mode Démo GitHub Pages : Simulation de validation serveur si le backend est absent
                     console.log("Serveur distant non présent (Mode Démo Pages). Simulation de la synchronisation.");
                     alert(`✅ Synchronisation réussie ! ${logs.length} relevé(s) transmis à la base centrale SNIM.`);
                     clearLocalStore();
