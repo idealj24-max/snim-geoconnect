@@ -1,0 +1,9 @@
+services:
+  snim-geoconnect:
+    build: .
+    container_name: snim_geoconnect_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./snim_geoconnect.db:/app/snim_geoconnect.db
+    restart: always
