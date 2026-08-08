@@ -1,0 +1,10 @@
+{
+  "short_name": "SNIM Geo",
+  "name": "SNIM GeoConnect Engine Mobile",
+  "icons": [],
+  "start_url": "/",
+  "background_color": "#003366",
+  "theme_color": "#003366",
+  "display": "standalone",
+  "orientation": "portrait"
+}
