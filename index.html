@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNIM GeoConnect Terrain v3.0</title>
+    <title>SNIM GeoConnect Terrain v3.1</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -180,7 +180,7 @@
 <body>
 
     <header>
-        <h1>🛠️ SNIM GeoConnect Terrain v3.0</h1>
+        <h1>🛠️ SNIM GeoConnect Terrain v3.1</h1>
     </header>
 
     <div class="status-bar">
@@ -204,7 +204,7 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>Site Mier / Exploitation</label>
+                <label>Site Minier / Exploitation</label>
                 <select id="siteMine" class="form-control">
                     <option value="Zouérate - Mine T014">Zouérate - Mine T014</option>
                     <option value="Zouérate - Tazadit">Zouérate - Tazadit</option>
@@ -280,7 +280,20 @@
         let map;
         let mapMarkers = [];
 
-        // Initialisation de la carte Leaflet (Centrée par défaut sur Zouérate)
+        // Fonction d'extraction propre Lat/Lng
+        function parseCoordinates(coordString) {
+            if (!coordString) return null;
+            const matches = coordString.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+            if (matches && matches.length >= 3) {
+                return {
+                    lat: parseFloat(matches[1]),
+                    lng: parseFloat(matches[2])
+                };
+            }
+            return null;
+        }
+
+        // Initialisation Carte
         function initMap() {
             map = L.map('map').setView([22.748300, -12.472200], 12);
 
@@ -290,59 +303,58 @@
             }).addTo(map);
         }
 
-        // Mettre à jour les marqueurs sur la carte
+        // Affichage des Marqueurs
         function afficherSurCarte(releves) {
             if (!map) return;
 
-            // Effacer anciens marqueurs
             mapMarkers.forEach(marker => map.removeLayer(marker));
             mapMarkers = [];
 
             let bounds = [];
 
             releves.forEach(item => {
-                if (item.coords && item.coords.includes(',')) {
-                    const parts = item.coords.split('(')[0].split(',');
-                    const lat = parseFloat(parts[0].trim());
-                    const lng = parseFloat(parts[1].trim());
+                const coords = parseCoordinates(item.coords);
+                if (coords) {
+                    let markerColor = '#002b49';
+                    if (item.alerteHSE) markerColor = '#d9534f';
+                    else if (item.typeRoche && item.typeRoche.includes('Hématite')) markerColor = '#d9534f';
+                    else if (item.typeRoche && item.typeRoche.includes('Magnetite')) markerColor = '#111111';
 
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                        // Déterminer la couleur du marqueur
-                        let markerColor = 'blue';
-                        if (item.alerteHSE) markerColor = 'orange';
-                        else if (item.typeRoche.includes('Hématite')) markerColor = 'red';
-                        else if (item.typeRoche.includes('Magnetite')) markerColor = 'black';
+                    const markerIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div style="background-color:${markerColor}; width:16px; height:16px; border-radius:50%; border:2px solid white; box-shadow:0 0 5px rgba(0,0,0,0.4);"></div>`,
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    });
 
-                        const markerIcon = L.divIcon({
-                            className: 'custom-div-icon',
-                            html: `<div style="background-color:${markerColor}; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>`,
-                            iconSize: [14, 14],
-                            iconAnchor: [7, 7]
-                        });
-
-                        const popupContent = `
-                            <b>${item.typeRoche}</b><br>
-                            👤 ${item.nomGeologue} (${item.matricule})<br>
-                            📅 ${new Date(item.date).toLocaleString('fr-FR')}<br>
-                            ${item.photo ? `<img src="${item.photo}" class="map-popup-img">` : ''}
-                        `;
-
-                        const marker = L.marker([lat, lng], { icon: markerIcon })
-                            .addTo(map)
-                            .bindPopup(popupContent);
-
-                        mapMarkers.push(marker);
-                        bounds.push([lat, lng]);
+                    let dateStr = 'Non spécifiée';
+                    if (item.date) {
+                        const d = new Date(item.date);
+                        if (!isNaN(d.getTime())) dateStr = d.toLocaleString('fr-FR');
                     }
+
+                    const popupContent = `
+                        <b>${item.typeRoche || 'Relevé'}</b><br>
+                        👤 ${item.nomGeologue || 'Géologue'} (${item.matricule || 'N/A'})<br>
+                        📅 ${dateStr}<br>
+                        ${item.photo ? `<img src="${item.photo}" class="map-popup-img">` : ''}
+                    `;
+
+                    const marker = L.marker([coords.lat, coords.lng], { icon: markerIcon })
+                        .addTo(map)
+                        .bindPopup(popupContent);
+
+                    mapMarkers.push(marker);
+                    bounds.push([coords.lat, coords.lng]);
                 }
             });
 
             if (bounds.length > 0) {
-                map.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });
+                map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
             }
         }
 
-        // Gestion Profil & Stockage
+        // Gestion Profil
         function chargerProfil() {
             document.getElementById('matricule').value = localStorage.getItem('snim_matricule') || 'M-84920';
             document.getElementById('nomGeologue').value = localStorage.getItem('snim_nom') || 'Idrissa Sall';
@@ -356,7 +368,7 @@
         document.getElementById('matricule').addEventListener('input', sauvegarderProfil);
         document.getElementById('nomGeologue').addEventListener('input', sauvegarderProfil);
 
-        // Geolocation GPS
+        // GPS Geolocation
         function getGPS() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
@@ -364,16 +376,16 @@
                         document.getElementById('gpsCoords').value = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
                     },
                     (err) => {
-                        document.getElementById('gpsCoords').value = "22.748300, -12.472200 (Mode Démo Zouérate)";
+                        document.getElementById('gpsCoords').value = "22.748300, -12.472200";
                     },
                     { timeout: 5000, enableHighAccuracy: true }
                 );
             } else {
-                document.getElementById('gpsCoords').value = "22.748300, -12.472200 (Mode Démo Zouérate)";
+                document.getElementById('gpsCoords').value = "22.748300, -12.472200";
             }
         }
 
-        // Sauvegarde Local
+        // Enregistrement
         function sauvegarderReleve() {
             const photoFile = document.getElementById('photoInput').files[0];
 
@@ -414,7 +426,7 @@
             afficherHistorique();
         }
 
-        // Affichage Historique & Carte
+        // Affichage Historique
         function afficherHistorique() {
             const releves = JSON.parse(localStorage.getItem('snim_releves') || '[]');
             document.getElementById('localCount').innerText = releves.length;
@@ -423,6 +435,12 @@
             container.innerHTML = '';
 
             releves.forEach(item => {
+                let dateFormatted = 'Date inconnue';
+                if (item.date) {
+                    const d = new Date(item.date);
+                    if (!isNaN(d.getTime())) dateFormatted = d.toLocaleString('fr-FR');
+                }
+
                 const div = document.createElement('div');
                 div.className = `history-item ${item.alerteHSE ? 'danger-hse' : ''}`;
                 div.innerHTML = `
@@ -431,12 +449,11 @@
                     📍 <b>GPS :</b> ${item.coords}<br>
                     ${item.notes ? `📝 <i>${item.notes}</i><br>` : ''}
                     ${item.photo ? `<img src="${item.photo}" class="history-img"><br>` : ''}
-                    <small style="color:#777;">${new Date(item.date).toLocaleString('fr-FR')}</small>
+                    <small style="color:#777;">${dateFormatted}</small>
                 `;
                 container.appendChild(div);
             });
 
-            // Mise à jour synchrone de la carte
             afficherSurCarte(releves);
         }
 
@@ -448,16 +465,21 @@
                 return;
             }
 
-            let csvContent = "\uFEFFID_Releve;Matricule_SNIM;Nom_Geologue;Site;Type_Roche;Coordonnees_GPS;Alerte_HSE;Notes;Date_Heure\n";
+            let csvContent = "\uFEFFID_Releve;Matricule_SNIM;Nom_Geologue;Site;Type_Roche;Latitude;Longitude;Alerte_HSE;Notes;Date_Heure\n";
 
             releves.forEach(r => {
+                const parsed = parseCoordinates(r.coords);
+                const lat = parsed ? parsed.lat : '';
+                const lng = parsed ? parsed.lng : '';
+
                 const row = [
                     `"${r.id}"`,
                     `"${r.matricule}"`,
                     `"${r.nomGeologue}"`,
                     `"${r.siteMine}"`,
                     `"${r.typeRoche}"`,
-                    `"${r.coords}"`,
+                    `"${lat}"`,
+                    `"${lng}"`,
                     `"${r.alerteHSE ? 'OUI' : 'NON'}"`,
                     `"${(r.notes || '').replace(/"/g, '""')}"`,
                     `"${r.date}"`
@@ -475,7 +497,7 @@
             document.body.removeChild(link);
         }
 
-        // Synchronisation Fictive
+        // Synchronisation
         function synchroniserServeur() {
             const releves = JSON.parse(localStorage.getItem('snim_releves') || '[]');
             if (releves.length === 0) {
@@ -485,7 +507,6 @@
             alert(`Synchronisation de ${releves.length} relevé(s) vers le serveur central SNIM réussie !`);
         }
 
-        // Initialisation globale au chargement
         window.onload = function() {
             chargerProfil();
             getGPS();
