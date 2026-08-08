@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SNIM GeoConnect Mobile</title>
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        :root { --snim-blue: #003366; --snim-yellow: #f39c12; --danger: #e74c3c; --success: #2ecc71; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 15px; color: #333; }
+        .header { background: var(--snim-blue); color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; margin-bottom: 15px; }
+        .status-bar { display: flex; justify-content: space-between; padding: 10px; background: #fff; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .online { color: var(--success); }
+        .offline { color: var(--danger); }
+        .card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        label { font-size: 0.9em; font-weight: bold; color: #555; display: block; margin-top: 10px; }
+        select, input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1em; }
+        .btn { width: 100%; padding: 12px; background: var(--snim-blue); color: white; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; margin-top: 15px; cursor: pointer; }
+        .btn-hse { background: var(--danger); }
+        .btn-sync { background: var(--snim-yellow); color: #000; }
+        .log-item { background: #f8f9fa; border-left: 4px solid var(--snim-blue); padding: 8px; margin-top: 8px; border-radius: 4px; font-size: 0.85em; }
+        .log-hse { border-left-color: var(--danger); background: #fdf2f2; }
+    </style>
+</head>
+<body>
+
+    <div class="header">⚒️ SNIM GeoConnect Terrain</div>
+
+    <div class="status-bar">
+        <span>Réseau : <span id="net-status" class="offline">Vérification...</span></span>
+        <span>Stockés localement : <span id="local-count">0</span></span>
+    </div>
+
+    <div class="card">
+        <h3>📍 Saisie Relevé Géologique</h3>
+        
+        <label>Type de Roche / Minerai</label>
+        <select id="rock_type">
+            <option value="Hématite Haute Teneur">Hématite Haute Teneur (Rich Ore)</option>
+            <option value="BIF / Magnetite">BIF / Quartzite Magnetitique</option>
+            <option value="Schiste / Stérile">Schiste / Stérile (Waste)</option>
+            <option value="Quartz Brecciated">Quartz Brecciated</option>
+        </select>
+
+        <label>Coordonnées GPS</label>
+        <input type="text" id="gps_coords" readonly placeholder="Recherche GPS en cours...">
+
+        <label>Notes & Observations Terrain</label>
+        <textarea id="notes" rows="2" placeholder="Structure, pendage, état de la fracture..."></textarea>
+
+        <div style="margin-top: 10px;">
+            <input type="checkbox" id="hse_alert" style="width: auto;">
+            <label for="hse_alert" style="display:inline; color: var(--danger);">🚨 Signalement Danger HSE (Fissure / Éboulement)</label>
+        </div>
+
+        <button class="btn" onclick="saveRecord()"> Enregistrer sur Mobile (Offline)</button>
+    </div>
+
+    <button class="btn btn-sync" onclick="triggerManualSync()">🔄 Synchroniser avec la Base SNIM</button>
+
+    <div class="card" style="margin-top: 15px;">
+        <h3>💾 Historique Local (IndexedDB)</h3>
+        <div id="local-logs-list"></div>
+    </div>
+
+    <script>
+        let db;
+        const request = indexedDB.open("SNIM_GeoDB", 1);
+
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            db.createObjectStore("logs", { keyPath: "id" });
+        };
+
+        request.onsuccess = (e) => {
+            db = e.target.result;
+            updateLocalCount();
+            renderLogs();
+        };
+
+        // Geolocation HTML5
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                document.getElementById('gps_coords').value = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+            },
+            () => {
+                document.getElementById('gps_coords').value = "22.748300, -12.472200 (Mode Démo Zouérate)";
+            }
+        );
+
+        // Network Status
+        function updateStatus() {
+            const status = document.getElementById('net-status');
+            if (navigator.onLine) {
+                status.innerText = "EN LIGNE";
+                status.className = "online";
+                autoSync();
+            } else {
+                status.innerText = "HORS-LIGNE (Désert)";
+                status.className = "offline";
+            }
+        }
+        window.addEventListener('online', updateStatus);
+        window.addEventListener('offline', updateStatus);
+        updateStatus();
+
+        function saveRecord() {
+            const rock = document.getElementById('rock_type').value;
+            const coords = document.getElementById('gps_coords').value.split(',');
+            const notes = document.getElementById('notes').value;
+            const hse = document.getElementById('hse_alert').checked;
+
+            const record = {
+                id: crypto.randomUUID(),
+                site: "Zouérate - Mine T014",
+                rock_type: rock,
+                latitude: parseFloat(coords[0]),
+                longitude: parseFloat(coords[1] || 0),
+                notes: notes,
+                hse_alert: hse,
+                created_at: new Date().toISOString()
+            };
+
+            const tx = db.transaction("logs", "readwrite");
+            tx.objectStore("logs").add(record);
+            tx.oncomplete = () => {
+                alert(hse ? "🚨 ALERTE HSE enregistrée localement !" : " Relevé géologique enregistré localement !");
+                document.getElementById('notes').value = "";
+                document.getElementById('hse_alert').checked = false;
+                updateLocalCount();
+                renderLogs();
+                if (navigator.onLine) autoSync();
+            };
+        }
+
+        function updateLocalCount() {
+            const tx = db.transaction("logs", "readonly");
+            const store = tx.objectStore("logs");
+            const countReq = store.count();
+            countReq.onsuccess = () => {
+                document.getElementById('local-count').innerText = countReq.result;
+            };
+        }
+
+        function renderLogs() {
+            const tx = db.transaction("logs", "readonly");
+            const store = tx.objectStore("logs");
+            const req = store.getAll();
+            req.onsuccess = () => {
+                const list = document.getElementById('local-logs-list');
+                list.innerHTML = req.result.map(log => `
+                    <div class="log-item ${log.hse_alert ? 'log-hse' : ''}">
+                        <strong>${log.rock_type}</strong> ${log.hse_alert ? '🚨 [HSE]' : ''}<br>
+                        📍 ${log.latitude}, ${log.longitude}<br>
+                        <small>${new Date(log.created_at).toLocaleString('fr-FR')}</small>
+                    </div>
+                `).join('') || '<small>Aucune donnée locale en attente.</small>';
+            };
+        }
+
+        async function autoSync() {
+            const tx = db.transaction("logs", "readonly");
+            const store = tx.objectStore("logs");
+            const req = store.getAll();
+
+            req.onsuccess = async () => {
+                const logs = req.result;
+                if (logs.length === 0) return;
+
+                try {
+                    const response = await fetch('/api/sync', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': 'SNIM-GEO-2026-SECURE-KEY'
+                        },
+                        body: JSON.stringify(logs)
+                    });
+
+                    if (response.ok) {
+                        const clearTx = db.transaction("logs", "readwrite");
+                        clearTx.objectStore("logs").clear();
+                        clearTx.oncomplete = () => {
+                            updateLocalCount();
+                            renderLogs();
+                            console.log("Synchronisation automatique réussie avec le serveur SNIM !");
+                        };
+                    }
+                } catch (err) {
+                    console.log("Serveur non joignable, conservation des données locales.");
+                }
+            };
+        }
+
+        function triggerManualSync() {
+            if (!navigator.onLine) {
+                alert("Vous êtes actuellement Hors-Ligne. Connectez-vous au réseau de la base pour synchroniser.");
+                return;
+            }
+            autoSync();
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
+</body>
+</html>
