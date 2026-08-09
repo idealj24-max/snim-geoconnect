@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNIM GeoConnect Terrain v3.1</title>
+    <title>SNIM GeoConnect Terrain v4.0</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -29,15 +29,34 @@
             padding: 15px;
             text-align: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            position: relative;
         }
 
         header h1 {
             margin: 0;
-            font-size: 1.2rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+            font-size: 1.1rem;
+        }
+
+        .user-badge {
+            font-size: 0.8rem;
+            background: rgba(255,255,255,0.15);
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin-top: 5px;
+            display: inline-block;
+        }
+
+        .btn-logout {
+            position: absolute;
+            right: 10px;
+            top: 12px;
+            background: var(--snim-danger);
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
         }
 
         .status-bar {
@@ -51,7 +70,6 @@
         }
 
         .status-online { color: var(--snim-green); }
-        .status-offline { color: var(--snim-danger); }
 
         .container {
             padding: 12px;
@@ -96,15 +114,6 @@
             border-radius: 6px;
             box-sizing: border-box;
             font-size: 0.95rem;
-        }
-
-        .row-2 {
-            display: flex;
-            gap: 10px;
-        }
-
-        .row-2 > div {
-            flex: 1;
         }
 
         .btn {
@@ -158,119 +167,149 @@
             margin-top: 8px;
         }
 
-        /* Leaflet Map Styling */
         #map {
             height: 280px;
             width: 100%;
             border-radius: 8px;
             border: 1px solid #ccc;
             margin-top: 10px;
-            z-index: 1;
         }
 
-        .map-popup-img {
-            width: 100%;
-            max-height: 100px;
-            object-fit: cover;
-            border-radius: 4px;
-            margin-top: 5px;
+        /* Screen Management */
+        .hidden { display: none !important; }
+        
+        .login-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            margin-top: 40px;
         }
     </style>
 </head>
 <body>
 
-    <header>
-        <h1>🛠️ SNIM GeoConnect Terrain v3.1</h1>
-    </header>
+    <!-- ÉCRAN DE CONNEXION -->
+    <div id="loginScreen" class="container">
+        <div class="login-box">
+            <h1 style="text-align: center; color: var(--snim-navy); font-size: 1.3rem;">🛠️ SNIM GeoConnect</h1>
+            <p style="text-align: center; font-size: 0.85rem; color: #666; margin-bottom: 20px;">Portail d'Accès Sécurisé Terrain & SIG</p>
 
-    <div class="status-bar">
-        <span>Réseau : <span id="netStatus" class="status-online">EN LIGNE</span></span>
-        <span>Stockés : <span id="localCount">0</span></span>
-    </div>
-
-    <div class="container">
-
-        <!-- Identité -->
-        <div class="card">
-            <h2>👤 Identité Géologue Terrain</h2>
-            <div class="row-2">
+            <form onsubmit="handleLogin(event)">
                 <div class="form-group">
                     <label>Matricule SNIM</label>
-                    <input type="text" id="matricule" class="form-control" placeholder="ex: M-84920">
+                    <input type="text" id="loginMatricule" class="form-control" placeholder="ex: M-84920" required>
                 </div>
+
                 <div class="form-group">
-                    <label>Nom & Prénom</label>
-                    <input type="text" id="nomGeologue" class="form-control" placeholder="ex: Idrissa Sall">
+                    <label>Mot de passe</label>
+                    <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required>
                 </div>
-            </div>
-            <div class="form-group">
-                <label>Site Minier / Exploitation</label>
-                <select id="siteMine" class="form-control">
-                    <option value="Zouérate - Mine T014">Zouérate - Mine T014</option>
-                    <option value="Zouérate - Tazadit">Zouérate - Tazadit</option>
-                    <option value="Guelb El Rhein">Guelb El Rhein</option>
-                    <option value="M'Haoudat">M'Haoudat</option>
-                </select>
-            </div>
-        </div>
 
-        <!-- Saisie Relevé -->
-        <div class="card">
-            <h2>📍 Saisie Relevé Géologique</h2>
-            
-            <div class="form-group">
-                <label>Type de Roche / Minerai</label>
-                <select id="typeRoche" class="form-control">
-                    <option value="Hématite Haute Teneur (Rich Ore)">Hématite Haute Teneur (Rich Ore)</option>
-                    <option value="Magnetite (Guelb)">Magnetite (Guelb)</option>
-                    <option value="Quartzite BIF (Itabirite)">Quartzite BIF (Itabirite)</option>
-                    <option value="Schiste / Stérile">Schiste / Stérile</option>
-                    <option value="Alluvion / Minerai Siliceux">Alluvion / Minerai Siliceux</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Coordonnées GPS</label>
-                <div style="display: flex; gap: 5px;">
-                    <input type="text" id="gpsCoords" class="form-control" readonly placeholder="Obtention du GPS...">
-                    <button type="button" onclick="getGPS()" style="padding: 0 12px; font-size: 1.2rem;">🔄</button>
+                <div class="form-group">
+                    <label>Rôle / Profil</label>
+                    <select id="loginRole" class="form-control">
+                        <option value="geologue">Géologue Terrain (Saisie & Relevés)</option>
+                        <option value="ingenieur">Ingénieur SIG / Validateur (Supervision)</option>
+                    </select>
                 </div>
-            </div>
 
-            <div class="form-group">
-                <label>📸 Photo du Spécimen / Fissure HSE</label>
-                <input type="file" id="photoInput" accept="image/*" capture="environment" class="form-control">
-            </div>
+                <button type="submit" class="btn btn-primary" style="margin-top: 15px;">🔒 Connexion</button>
+            </form>
+        </div>
+    </div>
 
-            <div class="form-group">
-                <label>Notes & Observations Terrain</label>
-                <textarea id="notes" class="form-control" rows="2" placeholder="Structure, pendage, état de la fracture..."></textarea>
-            </div>
+    <!-- ÉCRAN PRINCIPAL APPLICATION -->
+    <div id="appScreen" class="hidden">
+        <header>
+            <h1>🛠️ SNIM GeoConnect v4.0</h1>
+            <div id="userBadge" class="user-badge">Connecté : ---</div>
+            <button class="btn-logout" onclick="logout()">Déconnexion</button>
+        </header>
 
-            <div class="checkbox-group">
-                <input type="checkbox" id="alerteHSE">
-                <label for="alerteHSE">🚨 Signalement Danger HSE (Fissure / Éboulement)</label>
-            </div>
-
-            <button class="btn btn-primary" onclick="sauvegarderReleve()">💾 Enregistrer sur Mobile (Offline)</button>
+        <div class="status-bar">
+            <span>Réseau : <span class="status-online">EN LIGNE</span></span>
+            <span>Stockés : <span id="localCount">0</span></span>
         </div>
 
-        <!-- Synchronisation -->
-        <button class="btn btn-sync" onclick="synchroniserServeur()">🔄 Synchroniser avec la Base SNIM</button>
+        <div class="container">
 
-        <!-- Carte SIG Leaflet -->
-        <div class="card" style="margin-top: 15px;">
-            <h2>🗺️ Carte SIG des Relevés Terrain</h2>
-            <div id="map"></div>
+            <!-- MODULE SAISIE (Réservé au Géologue Terrain) -->
+            <div id="moduleSaisie" class="card">
+                <h2>📍 Saisie Relevé Géologique</h2>
+                
+                <div class="form-group">
+                    <label>Site Minier / Exploitation</label>
+                    <select id="siteMine" class="form-control">
+                        <option value="Zouérate - Mine T014">Zouérate - Mine T014</option>
+                        <option value="Zouérate - Tazadit">Zouérate - Tazadit</option>
+                        <option value="Guelb El Rhein">Guelb El Rhein</option>
+                        <option value="M'Haoudat">M'Haoudat</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Type de Roche / Minerai</label>
+                    <select id="typeRoche" class="form-control">
+                        <option value="Hématite Haute Teneur (Rich Ore)">Hématite Haute Teneur (Rich Ore)</option>
+                        <option value="Magnetite (Guelb)">Magnetite (Guelb)</option>
+                        <option value="Quartzite BIF (Itabirite)">Quartzite BIF (Itabirite)</option>
+                        <option value="Schiste / Stérile">Schiste / Stérile</option>
+                        <option value="Alluvion / Minerai Siliceux">Alluvion / Minerai Siliceux</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Coordonnées GPS</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="text" id="gpsCoords" class="form-control" readonly placeholder="Obtention du GPS...">
+                        <button type="button" onclick="getGPS()" style="padding: 0 12px; font-size: 1.2rem;">🔄</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>📸 Photo du Spécimen / Fissure HSE</label>
+                    <input type="file" id="photoInput" accept="image/*" capture="environment" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label>Notes & Observations Terrain</label>
+                    <textarea id="notes" class="form-control" rows="2" placeholder="Structure, pendage, état de la fracture..."></textarea>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="alerteHSE">
+                    <label for="alerteHSE">🚨 Signalement Danger HSE (Fissure / Éboulement)</label>
+                </div>
+
+                <button class="btn btn-primary" onclick="sauvegarderReleve()">💾 Enregistrer sur Mobile (Offline)</button>
+            </div>
+
+            <!-- Notice pour l'Ingénieur Validateur -->
+            <div id="moduleNoticeIngenieur" class="card hidden" style="border-top-color: #d97706;">
+                <h2>👁️ Mode Supervision Validateur</h2>
+                <p style="font-size: 0.85rem; color: #555; margin: 0;">
+                    Vous êtes connecté en mode <b>Ingénieur SIG / Validateur</b>. Vous avez un accès en lecture seule pour vérifier les relevés de terrain, consulter la carte et exporter les données vers les systèmes centraux.
+                </p>
+            </div>
+
+            <!-- Synchronisation -->
+            <button class="btn btn-sync" onclick="synchroniserServeur()">🔄 Synchroniser avec la Base SNIM</button>
+
+            <!-- Carte SIG Leaflet -->
+            <div class="card" style="margin-top: 15px;">
+                <h2>🗺️ Carte SIG des Relevés Terrain</h2>
+                <div id="map"></div>
+            </div>
+
+            <!-- Historique & Export -->
+            <div class="card" style="margin-top: 15px;">
+                <h2>💾 Historique Local & Export SIG</h2>
+                <button class="btn btn-export" onclick="exporterCSV()" style="margin-bottom: 12px;">📊 Exporter Données (CSV / Excel / QGIS)</button>
+                <div id="listeReleves"></div>
+            </div>
+
         </div>
-
-        <!-- Historique & Export -->
-        <div class="card" style="margin-top: 15px;">
-            <h2>💾 Historique Local & Export SIG</h2>
-            <button class="btn btn-export" onclick="exporterCSV()" style="margin-bottom: 12px;">📊 Exporter Données (CSV / Excel / QGIS)</button>
-            <div id="listeReleves"></div>
-        </div>
-
     </div>
 
     <!-- Leaflet JS -->
@@ -279,16 +318,67 @@
     <script>
         let map;
         let mapMarkers = [];
+        let currentUser = null;
 
-        // Fonction d'extraction propre Lat/Lng
+        // Login Handler
+        function handleLogin(e) {
+            e.preventDefault();
+            const matricule = document.getElementById('loginMatricule').value;
+            const role = document.getElementById('loginRole').value;
+
+            currentUser = {
+                matricule: matricule,
+                role: role,
+                name: role === 'geologue' ? 'Idrissa Sall' : 'Ing. Validateur SIG'
+            };
+
+            localStorage.setItem('snim_session', JSON.stringify(currentUser));
+            appliquerSession();
+        }
+
+        function logout() {
+            localStorage.removeItem('snim_session');
+            currentUser = null;
+            document.getElementById('appScreen').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+        }
+
+        function appliquerSession() {
+            const session = localStorage.getItem('snim_session');
+            if (!session) {
+                document.getElementById('loginScreen').classList.remove('hidden');
+                document.getElementById('appScreen').classList.add('hidden');
+                return;
+            }
+
+            currentUser = JSON.parse(session);
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('appScreen').classList.remove('hidden');
+
+            const roleLabel = currentUser.role === 'geologue' ? 'Géologue Terrain' : 'Ingénieur SIG';
+            document.getElementById('userBadge').innerText = `👤 ${currentUser.name} (${currentUser.matricule}) - [${roleLabel}]`;
+
+            if (currentUser.role === 'ingenieur') {
+                document.getElementById('moduleSaisie').classList.add('hidden');
+                document.getElementById('moduleNoticeIngenieur').classList.remove('hidden');
+            } else {
+                document.getElementById('moduleSaisie').classList.remove('hidden');
+                document.getElementById('moduleNoticeIngenieur').classList.add('hidden');
+            }
+
+            setTimeout(() => {
+                if (!map) initMap();
+                getGPS();
+                afficherHistorique();
+            }, 200);
+        }
+
+        // Parsing Coordonnées
         function parseCoordinates(coordString) {
             if (!coordString) return null;
             const matches = coordString.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
             if (matches && matches.length >= 3) {
-                return {
-                    lat: parseFloat(matches[1]),
-                    lng: parseFloat(matches[2])
-                };
+                return { lat: parseFloat(matches[1]), lng: parseFloat(matches[2]) };
             }
             return null;
         }
@@ -296,20 +386,16 @@
         // Initialisation Carte
         function initMap() {
             map = L.map('map').setView([22.748300, -12.472200], 12);
-
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 18,
                 attribution: '© OpenStreetMap - SNIM SIG'
             }).addTo(map);
         }
 
-        // Affichage des Marqueurs
         function afficherSurCarte(releves) {
             if (!map) return;
-
-            mapMarkers.forEach(marker => map.removeLayer(marker));
+            mapMarkers.forEach(m => map.removeLayer(m));
             mapMarkers = [];
-
             let bounds = [];
 
             releves.forEach(item => {
@@ -333,16 +419,9 @@
                         if (!isNaN(d.getTime())) dateStr = d.toLocaleString('fr-FR');
                     }
 
-                    const popupContent = `
-                        <b>${item.typeRoche || 'Relevé'}</b><br>
-                        👤 ${item.nomGeologue || 'Géologue'} (${item.matricule || 'N/A'})<br>
-                        📅 ${dateStr}<br>
-                        ${item.photo ? `<img src="${item.photo}" class="map-popup-img">` : ''}
-                    `;
-
                     const marker = L.marker([coords.lat, coords.lng], { icon: markerIcon })
                         .addTo(map)
-                        .bindPopup(popupContent);
+                        .bindPopup(`<b>${item.typeRoche}</b><br>👤 ${item.nomGeologue} (${item.matricule})<br>📅 ${dateStr}`);
 
                     mapMarkers.push(marker);
                     bounds.push([coords.lat, coords.lng]);
@@ -353,20 +432,6 @@
                 map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
             }
         }
-
-        // Gestion Profil
-        function chargerProfil() {
-            document.getElementById('matricule').value = localStorage.getItem('snim_matricule') || 'M-84920';
-            document.getElementById('nomGeologue').value = localStorage.getItem('snim_nom') || 'Idrissa Sall';
-        }
-
-        function sauvegarderProfil() {
-            localStorage.setItem('snim_matricule', document.getElementById('matricule').value);
-            localStorage.setItem('snim_nom', document.getElementById('nomGeologue').value);
-        }
-
-        document.getElementById('matricule').addEventListener('input', sauvegarderProfil);
-        document.getElementById('nomGeologue').addEventListener('input', sauvegarderProfil);
 
         // GPS Geolocation
         function getGPS() {
@@ -385,15 +450,12 @@
             }
         }
 
-        // Enregistrement
+        // Enregistrement Relevé
         function sauvegarderReleve() {
             const photoFile = document.getElementById('photoInput').files[0];
-
             if (photoFile) {
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    enregistrerDonnees(e.target.result);
-                };
+                reader.onload = (e) => enregistrerDonnees(e.target.result);
                 reader.readAsDataURL(photoFile);
             } else {
                 enregistrerDonnees(null);
@@ -403,8 +465,8 @@
         function enregistrerDonnees(base64Photo) {
             const nuevoReleve = {
                 id: crypto.randomUUID(),
-                matricule: document.getElementById('matricule').value,
-                nomGeologue: document.getElementById('nomGeologue').value,
+                matricule: currentUser ? currentUser.matricule : 'M-84920',
+                nomGeologue: currentUser ? currentUser.name : 'Idrissa Sall',
                 siteMine: document.getElementById('siteMine').value,
                 typeRoche: document.getElementById('typeRoche').value,
                 coords: document.getElementById('gpsCoords').value,
@@ -497,7 +559,6 @@
             document.body.removeChild(link);
         }
 
-        // Synchronisation
         function synchroniserServeur() {
             const releves = JSON.parse(localStorage.getItem('snim_releves') || '[]');
             if (releves.length === 0) {
@@ -508,10 +569,7 @@
         }
 
         window.onload = function() {
-            chargerProfil();
-            getGPS();
-            initMap();
-            afficherHistorique();
+            appliquerSession();
         };
     </script>
 </body>
